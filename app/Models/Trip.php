@@ -14,7 +14,8 @@ class Trip extends Model
         'trip_code', 'booked_by_id', 'passenger_id', 'driver_id',
         'vehicle_id', 'reason', 'destination', 'pickup_location',
         'scheduled_at', 'started_at', 'completed_at', 'status',
-        'rejection_reason', 'approved_by_id', 'approved_at', 'payment_processed',
+        'rejection_reason', 'approved_by_id', 'approved_at',
+        'payment_processed',
     ];
 
     protected $casts = [
@@ -25,22 +26,24 @@ class Trip extends Model
         'payment_processed' => 'boolean',
     ];
 
-    // ─── Boot ──────────────────────────────────────────────────────────
+    // ── Boot ───────────────────────────────────────────────────────
 
     protected static function booted(): void
     {
         static::creating(function (Trip $trip) {
-            $trip->trip_code = static::generateCode();
+            if (empty($trip->trip_code)) {
+                $trip->trip_code = static::generateCode();
+            }
         });
     }
 
     public static function generateCode(): string
     {
-        $last = static::orderByDesc('id')->value('id') ?? 0;
+        $last = static::withTrashed()->max('id') ?? 0;
         return 'TR-' . str_pad($last + 1, 4, '0', STR_PAD_LEFT);
     }
 
-    // ─── Relationships ─────────────────────────────────────────────────
+    // ── Relationships ──────────────────────────────────────────────
 
     public function bookedBy()
     {
@@ -77,7 +80,7 @@ class Trip extends Model
         return $this->hasOne(DriverRating::class);
     }
 
-    // ─── Scopes ────────────────────────────────────────────────────────
+    // ── Scopes ─────────────────────────────────────────────────────
 
     public function scopePending($query)
     {
@@ -96,14 +99,16 @@ class Trip extends Model
 
     public function scopeUnpaid($query)
     {
-        return $query->where('status', 'completed')->where('payment_processed', false);
+        return $query->where('status', 'completed')
+                     ->where('payment_processed', false);
     }
 
-    // ─── Helpers ───────────────────────────────────────────────────────
+    // ── Helpers ────────────────────────────────────────────────────
 
     public function isPending(): bool    { return $this->status === 'pending'; }
     public function isApproved(): bool   { return $this->status === 'approved'; }
     public function isCompleted(): bool  { return $this->status === 'completed'; }
+    public function isInProgress(): bool { return $this->status === 'in_progress'; }
 
     public function canBeRated(): bool
     {

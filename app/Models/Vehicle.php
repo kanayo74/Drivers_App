@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Carbon\CarbonInterface;
 
 class Vehicle extends Model
 {
@@ -27,7 +28,7 @@ class Vehicle extends Model
         'current_fuel_level'        => 'decimal:2',
     ];
 
-    // ─── Relationships ─────────────────────────────────────────────────
+    // ── Relationships ──────────────────────────────────────────────
 
     public function assignedDriver()
     {
@@ -59,29 +60,30 @@ class Vehicle extends Model
         return $this->hasMany(FuelSnapshot::class);
     }
 
-    // ─── Computed attributes ───────────────────────────────────────────
+    // ── Computed attributes ────────────────────────────────────────
 
     /** Current fuel as percentage 0–100 */
     public function getFuelPercentAttribute(): float
     {
-        if ($this->tank_capacity <= 0) return 0;
-        return round(($this->current_fuel_level / $this->tank_capacity) * 100, 1);
+        if ((float) $this->tank_capacity <= 0) return 0;
+        return round(((float) $this->current_fuel_level / (float) $this->tank_capacity) * 100, 1);
     }
 
     /**
-     * Estimated hours of fuel remaining based on engine consumption.
+     * Estimated hours of fuel remaining.
      * Formula: current_litres / consumption_per_hour
      */
     public function getEstimatedHoursRemainingAttribute(): float
     {
-        if ($this->fuel_consumption_per_hour <= 0) return 0;
-        return round($this->current_fuel_level / $this->fuel_consumption_per_hour, 1);
+        if ((float) $this->fuel_consumption_per_hour <= 0) return 0;
+        return round((float) $this->current_fuel_level / (float) $this->fuel_consumption_per_hour, 1);
     }
 
     /**
-     * Estimated datetime when fuel will run out
+     * Estimated datetime when fuel will run out.
+     * Return type uses CarbonInterface to support both Carbon and CarbonImmutable.
      */
-    public function getEstimatedEmptyAtAttribute(): ?\Carbon\CarbonInterface
+    public function getEstimatedEmptyAtAttribute(): ?CarbonInterface
     {
         if ($this->estimated_hours_remaining <= 0) return null;
         return now()->addHours($this->estimated_hours_remaining);
@@ -107,11 +109,11 @@ class Vehicle extends Model
     {
         $pct = $this->fuel_percent;
         $this->fuel_status = match(true) {
-            $pct >= 90   => 'full',
-            $pct >= 50   => 'half',
-            $pct >= 25   => 'quarter',
-            $pct > 5     => 'critical',
-            default      => 'empty',
+            $pct >= 90  => 'full',
+            $pct >= 50  => 'half',
+            $pct >= 25  => 'quarter',
+            $pct > 5    => 'critical',
+            default     => 'empty',
         };
         $this->save();
     }

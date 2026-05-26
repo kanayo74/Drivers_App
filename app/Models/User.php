@@ -24,7 +24,7 @@ class User extends Authenticatable
         'is_active'         => 'boolean',
     ];
 
-    // ─── Role helpers ──────────────────────────────────────────────────
+    // ── Role helpers ───────────────────────────────────────────────
 
     public function isAdmin(): bool    { return $this->role === 'admin'; }
     public function isDriver(): bool   { return $this->role === 'driver'; }
@@ -36,7 +36,7 @@ class User extends Authenticatable
         return in_array($this->role, ['admin', 'staff', 'marketer']);
     }
 
-    // ─── Relationships ─────────────────────────────────────────────────
+    // ── Relationships ──────────────────────────────────────────────
 
     public function driverProfile()
     {
@@ -48,19 +48,16 @@ class User extends Authenticatable
         return $this->hasOne(Vehicle::class, 'assigned_driver_id');
     }
 
-    /** Trips this user booked */
     public function bookedTrips()
     {
         return $this->hasMany(Trip::class, 'booked_by_id');
     }
 
-    /** Trips this user is a passenger in */
     public function passengerTrips()
     {
         return $this->hasMany(Trip::class, 'passenger_id');
     }
 
-    /** Trips this user drives */
     public function drivenTrips()
     {
         return $this->hasMany(Trip::class, 'driver_id');
@@ -96,7 +93,7 @@ class User extends Authenticatable
         return $this->hasMany(DriverAward::class, 'driver_id');
     }
 
-    // ─── Computed attributes ───────────────────────────────────────────
+    // ── Computed attributes ────────────────────────────────────────
 
     public function getAverageRatingAttribute(): float
     {
@@ -105,13 +102,15 @@ class User extends Authenticatable
 
     public function getOutstandingPaymentAttribute(): float
     {
-        return $this->payments()
+        return (float) $this->payments()
             ->where('status', 'pending')
             ->sum('total_amount');
     }
 
     public function getTotalTripsAttribute(): int
     {
-        return $this->drivenTrips()->where('status', 'completed')->count();
+        return $this->drivenTrips()
+            ->where('status', 'completed')
+            ->count();
     }
 }

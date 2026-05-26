@@ -2,20 +2,30 @@
 
 namespace App\Providers;
 
-use Carbon\CarbonImmutable;
-use Illuminate\Support\Facades\Date;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Validation\Rules\Password;
+use App\Services\AwardService;
+use App\Services\PaymentService;
+use App\Services\FuelDepletionService;
 
 class AppServiceProvider extends ServiceProvider
 {
     /**
      * Register any application services.
+     * Explicitly bind all services so Laravel's container always finds them.
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(AwardService::class, function ($app) {
+            return new AwardService();
+        });
+
+        $this->app->singleton(PaymentService::class, function ($app) {
+            return new PaymentService();
+        });
+
+        $this->app->singleton(FuelDepletionService::class, function ($app) {
+            return new FuelDepletionService();
+        });
     }
 
     /**
@@ -23,28 +33,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        $this->configureDefaults();
-    }
-
-    /**
-     * Configure default behaviors for production-ready applications.
-     */
-    protected function configureDefaults(): void
-    {
-        Date::use(CarbonImmutable::class);
-
-        DB::prohibitDestructiveCommands(
-            app()->isProduction(),
-        );
-
-        Password::defaults(fn (): ?Password => app()->isProduction()
-            ? Password::min(12)
-                ->mixedCase()
-                ->letters()
-                ->numbers()
-                ->symbols()
-                ->uncompromised()
-            : null,
-        );
+        //
     }
 }

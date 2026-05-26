@@ -2,25 +2,19 @@
 
 namespace App\Services;
 
-use App\Models\Vehicle;
-use App\Models\FuelLog;
-use App\Models\FuelSnapshot;
-use Carbon\Carbon;
+use App\Models\{Vehicle, FuelLog, FuelSnapshot, User};
+use Carbon\CarbonInterface;
 
 class FuelDepletionService
 {
     /**
-     * Calculate and update the estimated empty time for a vehicle.
-     *
-     * Formula:
-     *   hours_remaining = current_fuel_litres / consumption_litres_per_hour
-     *   estimated_empty_at = now() + hours_remaining
+     * Calculate depletion for a vehicle or any object with the needed properties.
      */
     public function calculateDepletion(Vehicle $vehicle): array
     {
-        $litres       = $vehicle->current_fuel_level;
-        $consumption  = $vehicle->fuel_consumption_per_hour; // L/hr
-        $tank         = $vehicle->tank_capacity;
+        $litres      = (float) $vehicle->current_fuel_level;
+        $consumption = (float) $vehicle->fuel_consumption_per_hour;
+        $tank        = (float) $vehicle->tank_capacity;
 
         if ($consumption <= 0 || $litres <= 0) {
             return [
@@ -30,9 +24,9 @@ class FuelDepletionService
             ];
         }
 
-        $hoursRemaining  = round($litres / $consumption, 2);
-        $estimatedEmptyAt = Carbon::now()->addHours($hoursRemaining);
-        $percent          = round(($litres / $tank) * 100, 1);
+        $hoursRemaining   = round($litres / $consumption, 2);
+        $estimatedEmptyAt = now()->addHours($hoursRemaining);
+        $percent          = $tank > 0 ? round(($litres / $tank) * 100, 1) : 0;
 
         return [
             'hours_remaining'    => $hoursRemaining,
@@ -42,33 +36,29 @@ class FuelDepletionService
     }
 
     /**
-     * When a driver marks fuel as Full or Half, update vehicle level.
+     * Record a refuel event — driver marked Full or Half.
      */
     public function recordRefuel(Vehicle $vehicle, string $fillType, ?float $cost = null): FuelLog
     {
-        $levelBefore = $vehicle->current_fuel_level;
+        $levelBefore = (float) $vehicle->current_fuel_level;
+        $tank        = (float) $vehicle->tank_capacity;
 
-        // Full = 100% of tank; Half = 50% of tank
         $levelAfter = match($fillType) {
-            'full'  => $vehicle->tank_capacity,
-            'half'  => $vehicle->tank_capacity * 0.5,
-            default => $vehicle->tank_capacity,
+            'full'  => $tank,
+            'half'  => $tank * 0.5,
+            default => $tank,
         };
 
-        $litresAdded  = max(0, $levelAfter - $levelBefore);
-        $depletion    = $this->calculateDepletion((object) [
-            'current_fuel_level'        => $levelAfter,
-            'fuel_consumption_per_hour' => $vehicle->fuel_consumption_per_hour,
-            'tank_capacity'             => $vehicle->tank_capacity,
-        ]);
+        $litresAdded = max(0, $levelAfter - $levelBefore);
 
         // Update vehicle
-        $vehicle->update([
-            'current_fuel_level' => $levelAfter,
-            'fuel_status'        => $fillType === 'full' ? 'full' : 'half',
-        ]);
+        $vehicle->current_fuel_level = $levelAfter;
+        $vehicle->fuel_status        = $fillType === 'full' ? 'full' : 'half';
+        $vehicle->save();
 
-        // Log it
+        $depletion = $this->calculateDepletion($vehicle);
+
+        // Log the refuel
         $log = FuelLog::create([
             'vehicle_id'                => $vehicle->id,
             'driver_id'                 => $vehicle->assigned_driver_id,
@@ -81,21 +71,20 @@ class FuelDepletionService
             'cost'                      => $cost,
         ]);
 
-        // Save snapshot for dashboard charting
+        // Save snapshot
         FuelSnapshot::create([
-            'vehicle_id'          => $vehicle->id,
-            'level_litres'        => $levelAfter,
-            'level_percent'       => $depletion['percent'],
-            'estimated_empty_at'  => $depletion['estimated_empty_at'],
-            'recorded_at'         => now(),
+            'vehicle_id'         => $vehicle->id,
+            'level_litres'       => $levelAfter,
+            'level_percent'      => $depletion['percent'],
+            'estimated_empty_at' => $depletion['estimated_empty_at'],
+            'recorded_at'        => now(),
         ]);
 
         return $log;
     }
 
     /**
-     * Run hourly via scheduler: decrement fuel for active vehicles and
-     * take a snapshot. Also flags critical vehicles.
+     * Hourly scheduler job — decrement fuel for all active vehicles.
      */
     public function runHourlyDepletion(): void
     {
@@ -103,18 +92,19 @@ class FuelDepletionService
             ->where('current_fuel_level', '>', 0)
             ->get();
 
+        $hour = now()->hour;
+
         foreach ($vehicles as $vehicle) {
-            // Deduct one hour of consumption (only during working hours 6am–10pm)
-            $hour = now()->hour;
+            // Only deplete during working hours 6am–10pm
             if ($hour >= 6 && $hour <= 22) {
-                $newLevel = max(0, $vehicle->current_fuel_level - $vehicle->fuel_consumption_per_hour);
+                $newLevel = max(0, (float) $vehicle->current_fuel_level
+                    - (float) $vehicle->fuel_consumption_per_hour);
                 $vehicle->current_fuel_level = $newLevel;
                 $vehicle->updateFuelStatus();
             }
 
             $depletion = $this->calculateDepletion($vehicle);
 
-            // Snapshot
             FuelSnapshot::create([
                 'vehicle_id'         => $vehicle->id,
                 'level_litres'       => $vehicle->current_fuel_level,
@@ -123,13 +113,11 @@ class FuelDepletionService
                 'recorded_at'        => now(),
             ]);
 
-            // Dispatch alert if critical
+            // Alert admins if critical
             if ($vehicle->isCriticalFuel()) {
-                // Notify admin — see Notifications/FuelCriticalAlert.php
-                $admins = \App\Models\User::where('role', 'admin')->get();
-                foreach ($admins as $admin) {
+                User::where('role', 'admin')->each(function ($admin) use ($vehicle) {
                     $admin->notify(new \App\Notifications\FuelCriticalAlert($vehicle));
-                }
+                });
             }
         }
     }

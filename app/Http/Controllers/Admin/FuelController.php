@@ -9,10 +9,10 @@ use App\Notifications\FuelAcknowledgedNotification;
 
 class FuelController extends Controller
 {
-    public function __construct(private FuelDepletionService $fuelService) {}
-
     public function index()
     {
+        $fuelService = app(FuelDepletionService::class);
+
         $requests = FuelRequest::where('status', 'pending')
             ->with(['vehicle', 'driver'])
             ->latest()
@@ -22,8 +22,8 @@ class FuelController extends Controller
             ->where('status', 'active')
             ->orderBy('current_fuel_level')
             ->get()
-            ->map(function ($v) {
-                $dep = $this->fuelService->calculateDepletion($v);
+            ->map(function ($v) use ($fuelService) {
+                $dep = $fuelService->calculateDepletion($v);
                 $v->hours_remaining    = $dep['hours_remaining'];
                 $v->estimated_empty_at = $dep['estimated_empty_at'];
                 $v->fuel_percent       = $dep['percent'];
