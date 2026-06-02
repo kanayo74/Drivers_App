@@ -1,4 +1,5 @@
 @extends('layouts.admin')
+@section('content')
 @section('page-title', $driver->name)
 
 @section('topbar-actions')
@@ -126,8 +127,64 @@
             <div class="empty-state">No ratings yet.</div>
             @endforelse
         </div>
-
+       
         <div class="card">
+    <div class="card-header">
+        <div>
+            <div class="card-title">Driver details</div>
+            <div class="card-sub">Manage license, working preferences and training</div>
+        </div>
+    </div>
+
+    <div style="padding:16px">
+        <!-- License form -->
+        <form method="POST" action="{{ route('admin.drivers.updateLicense', $driver) }}" enctype="multipart/form-data">
+            @csrf
+            <div class="form-group">
+                <label class="form-label">License number</label>
+                <input name="license_number" class="form-input" value="{{ old('license_number', $driver->license_number) }}">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <div class="form-group">
+                    <label class="form-label">License start</label>
+                    <input type="date" name="license_start_date" class="form-input" value="{{ optional($driver->license_start_date)->format('Y-m-d') }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">License end</label>
+                    <input type="date" name="license_end_date" class="form-input" value="{{ optional($driver->license_end_date)->format('Y-m-d') }}">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Upload license (jpg/png/pdf)</label>
+                <input type="file" name="license_file" class="form-input">
+                @if($driver->license_file)
+                <div style="margin-top:6px"><a href="{{ Storage::url($driver->license_file) }}" target="_blank">View current license</a></div>
+                @endif
+                </div>
+
+<div class="form-group" style="display:flex;align-items:center;gap:10px">
+    <label style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" name="weekend_only" value="1" {{ $driver->weekend_only ? 'checked' : '' }}>
+        Works weekends / public holidays only (paid only for those days)
+    </label>
+</div>
+
+<div style="display:flex;gap:8px">
+    <button class="btn btn-primary" type="submit">Save license</button>
+    @can('admin')
+                <form method="POST" action="{{ route('admin.drivers.remove', $driver) }}" style="display:inline">
+                    @csrf
+                    <button class="btn btn-red" type="submit" onclick="return confirm('Mark driver as left the company?')">Mark left</button>
+                </form>
+                @endcan
+
+                <a href="{{ route('admin.drivers.training', $driver) }}" class="btn btn-ghost">View training</a>
+            </div>
+        </form>
+    </div>
+</div>
+@endsection
+            <div class="card">
             <div class="card-header"><div class="card-title">Payment history</div></div>
             @forelse($driver->payments->take(5) as $pay)
             <div class="trip-row">

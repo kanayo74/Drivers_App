@@ -10,6 +10,8 @@ class Kernel extends ConsoleKernel
 {
     protected function schedule(Schedule $schedule): void
     {
+
+        $schedule->command('notify:license-expiry')->dailyAt('08:00');
         // ── Fuel depletion: runs every hour during working hours ──────────────
         $schedule->call(function () {
             app(FuelDepletionService::class)->runHourlyDepletion();

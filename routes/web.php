@@ -1,31 +1,35 @@
 <?php
-
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\LoginController;
-use App\Http\Controllers\Admin\AdminDashboardController;
-use App\Http\Controllers\Admin\TripController          as AdminTripController;
-use App\Http\Controllers\Admin\DriverController        as AdminDriverController;
-use App\Http\Controllers\Admin\VehicleController;
-use App\Http\Controllers\Admin\FuelController          as AdminFuelController;
-use App\Http\Controllers\Admin\PaymentController;
-use App\Http\Controllers\Admin\MaintenanceController;
-use App\Http\Controllers\Admin\TrainingController;
-use App\Http\Controllers\Admin\AwardController;
-use App\Http\Controllers\Driver\DriverDashboardController;
-use App\Http\Controllers\Driver\DriverTripController;
-use App\Http\Controllers\Driver\DriverFuelController;
-use App\Http\Controllers\Staff\StaffTripController;
-use App\Http\Controllers\Staff\RatingController;
+use App\Http\Controllers\Admin\{AdminDashboardController,TripController as AdminTripController,DriverController as AdminDriverController,VehicleController,FuelController as AdminFuelController,PaymentController,MaintenanceController,TrainingController,AwardController};
+use App\Http\Controllers\Driver\{DriverDashboardController,DriverTripController,DriverFuelController};
+use App\Http\Controllers\Staff\{StaffTripController,RatingController};
 
-// ─── Public ───────────────────────────────────────────────────────────────────
-Route::get('/', fn () => redirect()->route('login'));
+
+Route::get('/', fn() => redirect()->route('login'));
 Route::get('/login',  [LoginController::class, 'showLogin'])->name('login');
 Route::post('/login', [LoginController::class, 'login'])->name('login.submit');
 Route::post('/logout',[LoginController::class, 'logout'])->name('logout')->middleware('auth');
 
-// ─── ADMIN ────────────────────────────────────────────────────────────────────
+// ── ADMIN ─────────────────────────────────────────────────────────────
 Route::prefix('admin')->name('admin.')->middleware(['auth','role:admin'])->group(function () {
-    Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard', [AdminDashboardController::class,'index'])->name('dashboard');
+
+    // Driver routes
+    Route::post('drivers/{driver}/license', [AdminDriverController::class, 'updateLicense'])
+        ->name('drivers.updateLicense');
+    Route::post('drivers/{driver}/remove', [AdminDriverController::class, 'remove'])
+        ->name('drivers.remove');
+    Route::get('drivers/{driver}/training', [AdminDriverController::class, 'training'])
+        ->name('drivers.training');
+
+      // Maintenance routes (explicit)
+      Route::get('/maintenance', [MaintenanceController::class, 'index'])->name('maintenance.index');
+      Route::post('/maintenance', [MaintenanceController::class, 'store'])->name('maintenance.store');
+      Route::post('/maintenance/{vehicle}/done', [MaintenanceController::class, 'markDone'])->name('maintenance.done');
+      Route::post('/maintenance/{vehicle}/report', [MaintenanceController::class, 'reportIssue'])->name('maintenance.report');
+
+// ...existing code...
 
     Route::prefix('trips')->name('trips.')->group(function () {
         Route::get('/',                [AdminTripController::class,'index'])->name('index');
@@ -36,11 +40,17 @@ Route::prefix('admin')->name('admin.')->middleware(['auth','role:admin'])->group
     });
 
     Route::prefix('drivers')->name('drivers.')->group(function () {
-        Route::get('/',                 [AdminDriverController::class,'index'])->name('index');
-        Route::post('/',                [AdminDriverController::class,'store'])->name('store');
-        Route::get('/{driver}',         [AdminDriverController::class,'show'])->name('show');
-        Route::post('/{driver}/status', [AdminDriverController::class,'updateStatus'])->name('status');
+        Route::get('/',                     [AdminDriverController::class,'index'])->name('index');
+        Route::post('/',                    [AdminDriverController::class,'store'])->name('store');
+        Route::get('/{driver}',             [AdminDriverController::class,'show'])->name('show');
+        Route::put('/{driver}',             [AdminDriverController::class,'update'])->name('update');
+        Route::post('/{driver}/status',     [AdminDriverController::class,'updateStatus'])->name('status');
+        Route::post('/{driver}/deactivate', [AdminDriverController::class,'deactivate'])->name('deactivate');
+        Route::post('/{driver}/reactivate', [AdminDriverController::class,'reactivate'])->name('reactivate');
     });
+
+    Route::get('/holidays',  [AdminDriverController::class,'holidays'])->name('holidays');
+    Route::post('/holidays', [AdminDriverController::class,'storeHoliday'])->name('holidays.store');
 
     Route::prefix('vehicles')->name('vehicles.')->group(function () {
         Route::get('/',                         [VehicleController::class,'index'])->name('index');
@@ -50,8 +60,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth','role:admin'])->group
     });
 
     Route::prefix('fuel')->name('fuel.')->group(function () {
-        Route::get('/',                           [AdminFuelController::class,'index'])->name('index');
-        Route::post('/{fuelRequest}/acknowledge', [AdminFuelController::class,'acknowledge'])->name('acknowledge');
+        Route::get('/',                          [AdminFuelController::class,'index'])->name('index');
+        Route::post('/{fuelRequest}/acknowledge',[AdminFuelController::class,'acknowledge'])->name('acknowledge');
     });
 
     Route::prefix('payments')->name('payments.')->group(function () {
@@ -61,8 +71,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth','role:admin'])->group
     });
 
     Route::prefix('maintenance')->name('maintenance.')->group(function () {
-        Route::get('/',  [MaintenanceController::class,'index'])->name('index');
-        Route::post('/', [MaintenanceController::class,'store'])->name('store');
+        Route::get('/',                        [MaintenanceController::class,'index'])->name('index');
+        Route::post('/',                       [MaintenanceController::class,'store'])->name('store');
+        Route::post('/needs/{need}/ack',       [MaintenanceController::class,'acknowledgeNeed'])->name('needs.ack');
+        Route::post('/needs/{need}/resolve',   [MaintenanceController::class,'resolveNeed'])->name('needs.resolve');
     });
 
     Route::prefix('training')->name('training.')->group(function () {
@@ -77,40 +89,45 @@ Route::prefix('admin')->name('admin.')->middleware(['auth','role:admin'])->group
     });
 
     Route::get('/notifications', function () {
-        return view('admin.notifications', [
-            'notifications' => auth()->user()->notifications()->paginate(30),
-        ]);
+        return view('admin.notifications', ['notifications' => auth()->user()->notifications()->paginate(30)]);
     })->name('notifications');
-
     Route::post('/notifications/read-all', function () {
         auth()->user()->unreadNotifications->markAsRead();
         return back()->with('success', 'All notifications marked as read.');
     })->name('notifications.read-all');
 });
 
-// ─── DRIVER ───────────────────────────────────────────────────────────────────
+// ── DRIVER ────────────────────────────────────────────────────────────
 Route::prefix('driver')->name('driver.')->middleware(['auth','role:driver'])->group(function () {
     Route::get('/dashboard', [DriverDashboardController::class,'index'])->name('dashboard');
 
     Route::prefix('trips')->name('trips.')->group(function () {
-        Route::get('/',                     [DriverTripController::class,'index'])->name('index');
-        Route::post('/{trip}/start',        [DriverTripController::class,'start'])->name('start');
-        Route::post('/{trip}/complete',     [DriverTripController::class,'complete'])->name('complete');
-        Route::post('/{trip}/log-location', [DriverTripController::class,'logLocation'])->name('log-location');
+        Route::get('/',                      [DriverTripController::class,'index'])->name('index');
+        Route::post('/{trip}/start',         [DriverTripController::class,'start'])->name('start');
+        Route::post('/{trip}/complete',      [DriverTripController::class,'complete'])->name('complete');
+        Route::match(['get','post'], '/{trip}/complete', [DriverTripController::class,'complete'])->name('complete');
+        Route::post('/{trip}/log-location',  [DriverTripController::class,'logLocation'])->name('log-location');
     });
 
     Route::post('/fuel/request',                [DriverFuelController::class,'request'])->name('fuel.request');
     Route::post('/fuel/{vehicle}/mark-fuelled', [DriverFuelController::class,'markFuelled'])->name('fuel.mark-fuelled');
 
+    Route::post('/maintenance/done/{log}',   [DriverTripController::class,'markMaintenanceDone'])->name('maintenance.done');
+    Route::post('/maintenance/report-need',  [DriverTripController::class,'reportMaintenanceNeed'])->name('maintenance.report-need');
+
+    Route::get('/training', function () {
+        $assignments = auth()->user()->trainingAssignments()
+            ->with('assignedBy')->orderByDesc('training_date')->paginate(15);
+        return view('driver.training', compact('assignments'));
+    })->name('training');
+
     Route::get('/notifications', function () {
         auth()->user()->unreadNotifications->markAsRead();
-        return view('driver.notifications', [
-            'notifications' => auth()->user()->notifications()->paginate(20),
-        ]);
+        return view('driver.notifications', ['notifications' => auth()->user()->notifications()->paginate(20)]);
     })->name('notifications');
 });
 
-// ─── STAFF / MARKETER ────────────────────────────────────────────────────────
+// ── STAFF / MARKETER ──────────────────────────────────────────────────
 Route::prefix('staff')->name('staff.')->middleware(['auth','role:staff,marketer,admin'])->group(function () {
     Route::prefix('trips')->name('trips.')->group(function () {
         Route::get('/',               [StaffTripController::class,'index'])->name('index');
@@ -118,11 +135,8 @@ Route::prefix('staff')->name('staff.')->middleware(['auth','role:staff,marketer,
         Route::post('/{trip}/cancel', [StaffTripController::class,'cancel'])->name('cancel');
         Route::post('/{trip}/rate',   [RatingController::class,'store'])->name('rate');
     });
-
     Route::get('/notifications', function () {
         auth()->user()->unreadNotifications->markAsRead();
-        return view('staff.notifications', [
-            'notifications' => auth()->user()->notifications()->paginate(20),
-        ]);
+        return view('staff.notifications', ['notifications' => auth()->user()->notifications()->paginate(20)]);
     })->name('notifications');
 });

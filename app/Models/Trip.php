@@ -15,7 +15,7 @@ class Trip extends Model
         'vehicle_id', 'reason', 'destination', 'pickup_location',
         'scheduled_at', 'started_at', 'completed_at', 'status',
         'rejection_reason', 'approved_by_id', 'approved_at',
-        'payment_processed',
+        'payment_processed', 'qualifies_for_payment',
     ];
 
     protected $casts = [
@@ -24,6 +24,7 @@ class Trip extends Model
         'completed_at'      => 'datetime',
         'approved_at'       => 'datetime',
         'payment_processed' => 'boolean',
+        'qualifies_for_payment' => 'boolean',
     ];
 
     // ── Boot ───────────────────────────────────────────────────────
