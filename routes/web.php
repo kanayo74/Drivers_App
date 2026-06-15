@@ -105,7 +105,7 @@ Route::prefix('driver')->name('driver.')->middleware(['auth', 'role:driver'])->g
 	Route::prefix('maintenance')->name('maintenance.')->group(function () {
 		Route::get('/', [DriverMaintenanceController::class, 'index'])->name('index');
 		Route::post('/', [DriverMaintenanceController::class, 'store'])->name('store');
-		Route::post('/{vehicle}/report', [DriverMaintenanceController::class, 'reportIssue'])->name('maintenance.report');
+		Route::post('/{vehicle}/report', [DriverMaintenanceController::class, 'reportIssue'])->name('report');
 	});
 	
 	Route::prefix('trips')->name('trips.')->group(function () {

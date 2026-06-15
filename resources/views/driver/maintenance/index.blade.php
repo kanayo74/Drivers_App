@@ -1,7 +1,7 @@
 {{-- admin/maintenance/index.blade.php --}}
-@extends('layouts.admin')
-
+@extends('layouts.driver')
 @section('page-title','Maintenance')
+
 @section('topbar-actions')
 	<button class="btn btn-primary" onclick="openModal('maintenance-modal')">+ Log Service</button>
 @endsection
@@ -9,36 +9,28 @@
 @section('content')
 	<div class="card" style="margin-bottom:10px">
 		@forelse($vehicles as $vehicle)
-			@if($vehicle->maintenanceRecords?->where('status', '!=', 'completed')->count())
-				<div class="card" style="margin-bottom:10px">
-					<div class="card-header">
-						<div>
-							<div class="card-title">{{ $vehicle->plate_number }} — {{ $vehicle->make }} {{ $vehicle->model }}</div>
-							<div class="card-sub">Last maintenance: {{ optional($vehicle->last_maintenance_at)->diffForHumans() ?? 'Never' }}</div>
-						</div>
-					</div>
-					<div style="padding:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-						<form method="POST" action="{{ route('admin.maintenance.done', $vehicle) }}">
-							@csrf
-							<input type="hidden" name="maintenance_id" value="">
-							<button class="btn btn-primary" type="submit">Mark monthly maintenance done</button>
-						</form>
-						
-						<button class="btn btn-ghost" onclick="toggleReport('report-{{ $vehicle->id }}')">Report issue</button>
-						
-						<div id="report-{{ $vehicle->id }}" class="report-panel" style="display:none;margin-left:12px">
-							<form method="POST" action="{{ route('admin.maintenance.report', $vehicle) }}">
-								@csrf
-								<input type="text" name="type" placeholder="e.g. oil, tires" class="form-input" style="margin-bottom:6px">
-								<textarea name="issue" required class="form-textarea" rows="2" placeholder="Describe the problem..."></textarea>
-								<div style="margin-top:6px">
-									<button class="btn btn-red" type="submit">Report</button>
-								</div>
-							</form>
-						</div>
+			<div class="card" style="margin-bottom:10px">
+				<div class="card-header">
+					<div>
+						<div class="card-title">{{ $vehicle->plate_number }} — {{ $vehicle->make }} {{ $vehicle->model }}</div>
+						<div class="card-sub">Last maintenance: {{ optional($vehicle->last_maintenance_at)->diffForHumans() ?? 'Never' }}</div>
 					</div>
 				</div>
-			@endif
+				<div style="padding:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+					<button class="btn btn-ghost" onclick="toggleReport('report-{{ $vehicle->id }}')">Report issue</button>
+					
+					<div id="report-{{ $vehicle->id }}" class="report-panel" style="display:none;margin-left:12px">
+						<form method="POST" action="{{ route('driver.maintenance.report', $vehicle) }}">
+							@csrf
+							<input type="text" name="type" placeholder="e.g. oil, tires" class="form-input" style="margin-bottom:6px">
+							<textarea name="issue" required class="form-textarea" rows="2" placeholder="Describe the problem..."></textarea>
+							<div style="margin-top:6px">
+								<button class="btn btn-red" type="submit">Send to admin</button>
+							</div>
+						</form>
+					</div>
+				</div>
+			</div>
 		@empty
 			<div class="empty-state">No vehicles found.</div>
 		@endforelse
@@ -97,7 +89,7 @@
 	<div class="modal-bg" id="maintenance-modal">
 		<div class="modal">
 			<div class="modal-title">Log maintenance record</div>
-			<form method="POST" action="{{ route('admin.maintenance.store') }}">
+			<form method="POST" action="{{ route('driver.maintenance.store') }}">
 				@csrf
 				@if(in_array('role:admin', request()->route()->middleware()))
 					<div class="form-group">
